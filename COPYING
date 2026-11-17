@@ -174,3 +174,9 @@ INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
 CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
+
+jq also bundles "yyjson" (vendor/yyjson), a high performance JSON library by
+YaoYuan, distributed under the MIT license; see vendor/yyjson/LICENSE.
+
+jq also bundles "stb_sprintf" (vendor/stb_sprintf) by Jeff Roberts and Sean
+Barrett, which is public domain / MIT; see vendor/stb_sprintf/LICENSE.
