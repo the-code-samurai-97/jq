@@ -532,6 +532,115 @@ static jv f_length(jq_state *jq, jv input) {
   }
 }
 
+/*
+ * skeleton: the shape of a JSON value.  Objects keep their keys, scalars become
+ * their type name, and an array becomes a one-element array describing all of
+ * its elements merged together (keys unioned, differing scalar types joined
+ * with "|", incompatible shapes reported as "mixed").
+ */
+static jv skeleton_of(jv v);
+
+// Union of two "a|b" type-name strings: split, sort, de-duplicate, rejoin.
+static jv skeleton_union(jv a, jv b) {
+  jv parts = jv_array_concat(jv_string_split(a, jv_string("|")),
+                             jv_string_split(b, jv_string("|")));
+  parts = jv_sort(parts, jv_copy(parts));
+  jv out = jv_string("");
+  jv prev = jv_invalid();
+  jv_array_foreach(parts, i, p) {
+    if (jv_is_valid(prev) && jv_equal(jv_copy(prev), jv_copy(p))) {
+      jv_free(p);
+      continue;
+    }
+    if (i > 0 && jv_is_valid(prev))
+      out = jv_string_append_str(out, "|");
+    out = jv_string_append_buf(out, jv_string_value(p), jv_string_length_bytes(jv_copy(p)));
+    jv_free(prev);
+    prev = p;
+  }
+  jv_free(prev);
+  jv_free(parts);
+  return out;
+}
+
+static jv skeleton_merge(jv a, jv b) {
+  if (jv_equal(jv_copy(a), jv_copy(b))) {
+    jv_free(b);
+    return a;
+  }
+  jv_kind ka = jv_get_kind(a), kb = jv_get_kind(b);
+  if (ka == JV_KIND_OBJECT && kb == JV_KIND_OBJECT) {
+    jv_object_foreach(b, k, bv) {
+      jv av = jv_object_get(jv_copy(a), jv_copy(k));
+      if (jv_is_valid(av)) {
+        a = jv_object_set(a, k, skeleton_merge(av, bv));
+      } else {
+        jv_free(av);
+        a = jv_object_set(a, k, bv);
+      }
+    }
+    jv_free(b);
+    return a;
+  }
+  if (ka == JV_KIND_ARRAY && kb == JV_KIND_ARRAY) {
+    if (jv_array_length(jv_copy(a)) == 0) {
+      jv_free(a);
+      return b;
+    }
+    if (jv_array_length(jv_copy(b)) == 0) {
+      jv_free(b);
+      return a;
+    }
+    jv m = skeleton_merge(jv_array_get(a, 0), jv_array_get(b, 0));
+    return jv_array_append(jv_array(), m);
+  }
+  if (ka == JV_KIND_STRING && kb != JV_KIND_STRING &&
+      strcmp(jv_string_value(a), "null") == 0) {
+    jv_free(a);
+    return b;
+  }
+  if (kb == JV_KIND_STRING && ka != JV_KIND_STRING &&
+      strcmp(jv_string_value(b), "null") == 0) {
+    jv_free(b);
+    return a;
+  }
+  if (ka == JV_KIND_STRING && kb == JV_KIND_STRING)
+    return skeleton_union(a, b);
+  jv_free(a);
+  jv_free(b);
+  return jv_string("mixed");
+}
+
+static jv skeleton_of(jv v) {
+  switch (jv_get_kind(v)) {
+  case JV_KIND_OBJECT: {
+    jv out = jv_object();
+    jv_object_foreach(v, k, val)
+      out = jv_object_set(out, k, skeleton_of(val));
+    jv_free(v);
+    return out;
+  }
+  case JV_KIND_ARRAY: {
+    jv acc = jv_invalid();
+    jv_array_foreach(v, i, e) {
+      jv s = skeleton_of(e);
+      acc = jv_is_valid(acc) ? skeleton_merge(acc, s) : s;
+    }
+    jv_free(v);
+    return jv_is_valid(acc) ? jv_array_append(jv_array(), acc) : jv_array();
+  }
+  default: {
+    jv t = jv_string(jv_kind_name(jv_get_kind(v)));
+    jv_free(v);
+    return t;
+  }
+  }
+}
+
+static jv f_skeleton(jq_state *jq, jv input) {
+  return skeleton_of(input);
+}
+
 static jv f_tostring(jq_state *jq, jv input) {
   if (jv_get_kind(input) == JV_KIND_STRING) {
     return input;
@@ -2047,6 +2156,7 @@ BINOPS
   CFUNC(f_tonumber, "tonumber", 1),
   CFUNC(f_toboolean, "toboolean", 1),
   CFUNC(f_tostring, "tostring", 1),
+  CFUNC(f_skeleton, "skeleton", 1),
   CFUNC(f_keys, "keys", 1),
   CFUNC(f_keys_unsorted, "keys_unsorted", 1),
   CFUNC(f_startswith, "startswith", 2),
