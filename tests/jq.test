@@ -2894,3 +2894,20 @@ null
 try ((reduce range(10001) as $_ ({}; {a: .})) as $x | [$x, $x] | unique) catch .
 null
 "Comparison too deep"
+
+# skeleton: structure only, with types in place of values
+skeleton
+{"a":1,"b":[{"x":1},{"x":"s","y":true}],"c":{},"d":null,"e":[]}
+{"a":"number","b":[{"x":"number|string","y":"boolean"}],"c":{},"d":"null","e":[]}
+
+skeleton
+[[],[1],[null],[2,3]]
+[["null|number"]]
+
+skeleton
+[{"a":1},{"a":[1]},{"b":null}]
+[{"a":"mixed","b":"null"}]
+
+[.[]|skeleton]
+[1,"a",true,null,false]
+["number","string","boolean","null","boolean"]

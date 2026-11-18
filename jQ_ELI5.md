@@ -402,7 +402,35 @@ $ echo '{"a":1}' | jq -e . > /dev/null && echo valid
 $ echo '{bad' | jq -e . > /dev/null 2>&1 || echo invalid
 ```
 
-## 16. A few cheat-sheet flags
+## 16. See the shape of a file (skeleton)
+
+`-k` (`--skeleton`) prints only the structure of each output: keys are kept,
+values become their type. Arrays are shown once, with all of their elements
+merged (keys combined, differing types joined with `|`, e.g. `"null|string"`).
+Handy for getting to know a big file before writing a filter.
+
+```console
+# The structure of an object
+$ echo '{"name":"Ada","age":36,"tags":["x","y"],"home":{"city":"Paris"}}' | jq -k .
+
+# A list of records: one merged record describes them all
+$ echo '[{"id":1,"n":"a"},{"id":2,"n":null,"extra":true}]' | jq -ck .
+
+# Works on any part of the data
+$ echo '{"items":[{"id":1,"tags":["a"]},{"id":2}]}' | jq -ck '.items'
+
+# With -s the inputs are first collected into one array (shape of the whole file, wrapped)
+$ printf '{"a":1}\n{"a":"x","b":2}\n' | jq -sck .
+
+# The same thing as a builtin inside a filter
+$ echo '{"a":[1,2],"b":"s"}' | jq -c '.a | skeleton'
+
+# Just the top-level keys, or all key paths
+$ echo '{"a":{"b":1},"c":2}' | jq -c 'keys'
+$ echo '{"a":{"b":1},"c":2}' | jq -c '[paths(scalars) | join(".")]'
+```
+
+## 17. A few cheat-sheet flags
 
 | Flag | Meaning |
 |---|---|
@@ -413,6 +441,7 @@ $ echo '{bad' | jq -e . > /dev/null 2>&1 || echo invalid
 | `-R` | read raw text lines instead of JSON |
 | `-e` | set exit status from the last output |
 | `-S` | sort object keys |
+| `-k` | print only the structure (keys and types) |
 | `-a` | ASCII-only output |
 | `-C` / `-M` | force colour / no colour |
 | `--arg k v` | set `$k` to the string `v` |

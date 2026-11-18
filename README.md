@@ -18,6 +18,26 @@ Both are git submodules (`git submodule update --init`) and are always on; see
 [Faster JSON parsing with yyjson](#faster-json-parsing-with-yyjson) for details.
 Build and install with `./install.sh`.
 
+### `-k` / `--skeleton`: see the structure of a file
+
+```console
+$ jq -k . compile_commands.json
+[
+  {
+    "file": "string",
+    "arguments": [
+      "string"
+    ],
+    "directory": "string"
+  }
+]
+```
+
+Prints keys and types only; arrays are collapsed to one merged element
+(`"null|string"` means both occurred). Works with other options and filters
+(`jq -k '.items' file`, `jq -sk . file`), and there is a `skeleton` builtin for
+use inside filters.
+
 ### Benchmarks
 
 Compared with the distribution's jq 1.8.1 on the same machine. Output was

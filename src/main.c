@@ -82,6 +82,8 @@ static void usage(int code, int keep_it_short) {
       "  -a, --ascii-output        output strings by only ASCII characters\n"
       "                            using escape sequences;\n"
       "  -S, --sort-keys           sort keys of each object on output;\n"
+      "  -k, --skeleton            print only the structure of each output:\n"
+      "                            keys kept, values replaced by their type;\n"
       "  -C, --color-output        colorize JSON output;\n"
       "  -M, --monochrome-output   disable colored output;\n"
       "      --tab                 use tabs for indentation;\n"
@@ -157,6 +159,7 @@ enum {
   UNBUFFERED_OUTPUT     = 2048,
   EXIT_STATUS           = 4096,
   SEQ                   = 16384,
+  SKELETON              = 65536,
   /* debugging only */
   DUMP_DISASM           = 32768,
 };
@@ -172,11 +175,22 @@ enum {
 #define jq_exit_with_status(r)  exit(abs(r))
 #define jq_exit(r)              exit( r > 0 ? r : 0 )
 
+// Compiled `skeleton` program applied to every output when -k is given.
+static jq_state *skeleton_jq;
+
 static int process(jq_state *jq, jv value, int flags, int dumpopts, int options) {
   int ret = JQ_OK_NO_OUTPUT; // No valid results && -e -> exit(4)
   jq_start(jq, value, flags);
   jv result;
   while (jv_is_valid(result = jq_next(jq))) {
+    if (skeleton_jq) {
+      jq_start(skeleton_jq, result, 0);
+      result = jq_next(skeleton_jq);
+      if (!jv_is_valid(result)) {
+        jv_free(result);
+        continue;
+      }
+    }
     if ((options & RAW_OUTPUT) && jv_get_kind(result) == JV_KIND_STRING) {
       if (options & ASCII_OUTPUT) {
         jv_dumpf(jv_copy(result), stdout, JV_PRINT_ASCII);
@@ -401,6 +415,8 @@ int main(int argc, char* argv[]) {
           options |= ASCII_OUTPUT;
         } else if (isoption(&text, 0, "unbuffered", is_short)) {
           options |= UNBUFFERED_OUTPUT;
+        } else if (isoption(&text, 'k', "skeleton", is_short)) {
+          options |= SKELETON;
         } else if (isoption(&text, 'S', "sort-keys", is_short)) {
           options |= SORTED_OUTPUT;
         } else if (isoption(&text, 'R', "raw-input", is_short)) {
@@ -677,6 +693,15 @@ int main(int argc, char* argv[]) {
       jq_util_input_enable_fast_parse(input_state);
   }
 
+  if (options & SKELETON) {
+    skeleton_jq = jq_init();
+    if (skeleton_jq == NULL || !jq_compile(skeleton_jq, "skeleton")) {
+      fprintf(stderr, "jq: error: cannot compile skeleton program\n");
+      ret = JQ_ERROR_COMPILE;
+      goto out;
+    }
+  }
+
   // Let jq program read from inputs
   jq_set_input_cb(jq, jq_util_input_next_input_cb, input_state);
 
@@ -743,6 +768,8 @@ out:
   jv_free(program_arguments);
   jq_util_input_free(&input_state);
   jq_teardown(&jq);
+  if (skeleton_jq)
+    jq_teardown(&skeleton_jq);
 
   if (options & EXIT_STATUS) {
     if (ret != JQ_OK_NO_OUTPUT)
